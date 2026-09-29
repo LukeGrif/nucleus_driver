@@ -1,0 +1,45 @@
+name: BlueOS extension - deploy image
+
+# Builds the multi-arch image and pushes it to Docker Hub as
+# <DOCKER_USERNAME>/blueos-nucleus-mount:<branch or tag>. A tag like 1.2.3 also pushes :latest.
+# Needs the repository secrets DOCKER_USERNAME and DOCKER_PASSWORD (a Docker Hub access token).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["*.*.*"]
+    paths:
+      - "blueos_extension/**"
+      - ".github/workflows/blueos_extension_deploy.yml"
+
+jobs:
+  check-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - id: check
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          if [ -n "$DOCKER_USERNAME" ] && [ -n "$DOCKER_PASSWORD" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::DOCKER_USERNAME / DOCKER_PASSWORD secrets are not set, skipping the deploy."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-docker-image:
+    needs: check-secrets
+    if: needs.check-secrets.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy BlueOS Extension
+        uses: BlueOS-community/Deploy-BlueOS-Extension@v1
+        with:
+          docker-username: ${{ secrets.DOCKER_USERNAME }}
+          docker-password: ${{ secrets.DOCKER_PASSWORD }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          image-name: nucleus-mount
+          context: blueos_extension

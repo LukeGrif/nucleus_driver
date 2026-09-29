@@ -1,5 +1,8 @@
 # BlueOS Nucleus Extension
 
+> **Note (this fork):** `nucleus_extension/` in this folder is a separate, unofficial extension with a configurable
+> DVL mounting rotation. See [EXTENSION.md](EXTENSION.md). The text below describes Nortek's published extension.
+
 ## Intro
 
 This extension integrates the Nortek **Nucleus** into the **BlueROV2** via the **BlueOS** extensions platform.  

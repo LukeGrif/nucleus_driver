@@ -1,0 +1,9 @@
+{
+    "name": "Nucleus DVL (mount rotation)",
+    "description": "Nortek Nucleus DVL driver with a configurable mounting rotation",
+    "icon": "mdi-axis-arrow",
+    "company": "",
+    "version": "0.1.0",
+    "webpage": "https://github.com/LukeGrif/nucleus_driver/tree/main/blueos_extension",
+    "api": "/api/status"
+}

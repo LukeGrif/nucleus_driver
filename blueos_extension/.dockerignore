@@ -1,0 +1,4 @@
+tests
+pictures
+**/__pycache__
+*.md

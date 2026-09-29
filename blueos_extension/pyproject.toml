@@ -1,0 +1,23 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.pylint.main]
+disable = [
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "logging-fstring-interpolation",
+    "broad-exception-caught",
+    "too-few-public-methods",
+]
+
+[tool.pylint.format]
+max-line-length = 120

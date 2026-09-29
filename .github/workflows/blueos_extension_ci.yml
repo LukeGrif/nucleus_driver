@@ -1,0 +1,55 @@
+name: BlueOS extension - lint, test, build
+
+on:
+  pull_request:
+    paths:
+      - "blueos_extension/**"
+      - ".github/workflows/blueos_extension_ci.yml"
+  push:
+    paths:
+      - "blueos_extension/**"
+      - ".github/workflows/blueos_extension_ci.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: blueos_extension
+
+# Lint, tests and the image build are separate jobs, so a lint failure never stops the tests from
+# running. Only the extension is linted: the driver library and ros2 code are not black/isort formatted.
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9" # same as the Docker base image
+      - run: pip install -r requirements-dev.txt
+      - run: black --check --diff .
+      - run: isort --check-only --diff .
+      - run: pylint nucleus_extension
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -v
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (not pushed)
+        run: docker build -t nucleus-mount-extension:ci .
+      - name: Smoke test the image
+        run: |
+          docker run -d --name ext -p 8000:8000 nucleus-mount-extension:ci
+          for i in $(seq 1 30); do curl -sf localhost:8000/api/status && break; sleep 1; done
+          curl -sf localhost:8000/api/status
+          curl -sf localhost:8000/register_service
+          docker rm -f ext

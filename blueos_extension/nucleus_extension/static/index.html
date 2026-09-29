@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nucleus DVL</title>
+<style>
+  :root { --bg: #f4f6f8; --card: #fff; --text: #1d2733; --muted: #5d6b7a; --line: #d6dde4; --accent: #1565c0; --warn: #b45309; --bad: #b91c1c; --good: #15803d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1418; --card: #1a2128; --text: #e3e8ed; --muted: #97a4b1; --line: #2c3640; --accent: #64a8f0; --warn: #f0a44a; --bad: #f07070; --good: #5fd08a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); max-width: 1200px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+  label { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  input[type=text], input[type=number], select { padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--text); min-width: 0; }
+  input[type=number] { width: 90px; }
+  button { padding: 6px 12px; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent); color: #fff; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--accent); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  td, th { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+  td:first-child, th:first-child { text-align: left; }
+  .muted { color: var(--muted); }
+  .msg { min-height: 1.4em; margin-top: 6px; }
+  .error { color: var(--bad); }
+  .ok { color: var(--good); }
+  .warn { color: var(--warn); font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Nortek Nucleus DVL</h1>
+<div class="grid">
+
+  <section class="card">
+    <h2>Status</h2>
+    <div id="status">Loading…</div>
+    <div class="muted" id="device"></div>
+    <div class="row">
+      <button onclick="act('connect')">Connect</button>
+      <button class="secondary" onclick="act('disconnect')">Disconnect</button>
+      <button onclick="act('start')">Start</button>
+      <button class="secondary" onclick="act('stop')">Stop</button>
+    </div>
+    <div class="msg" id="action-msg"></div>
+  </section>
+
+  <section class="card">
+    <h2>Connection</h2>
+    <label>Nucleus IP / hostname <input type="text" id="hostname" placeholder="192.168.2.201"></label>
+    <label><input type="checkbox" id="stream_only"> Stream only (port 9002, no commands sent)</label>
+    <label><input type="checkbox" id="autoconnect"> Autoconnect on boot</label>
+    <label><input type="checkbox" id="autostart"> Autostart after autoconnect</label>
+    <h2 style="margin-top:12px">Output to ArduSub</h2>
+    <label><input type="checkbox" id="enabled"> Send data to the vehicle</label>
+    <label>Velocity message
+      <select id="message_type">
+        <option value="POSITION_DELTA">VISION_POSITION_DELTA (as before)</option>
+        <option value="SPEED_ESTIMATE">VISION_SPEED_ESTIMATE</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="rangefinder"> Send altimeter as DISTANCE_SENSOR (needs RNGFND1_TYPE = MAVLink)</label>
+    <div class="row"><button onclick="saveGeneral()">Apply</button></div>
+    <div class="msg" id="general-msg"></div>
+  </section>
+
+  <section class="card">
+    <h2>Mounting</h2>
+    <p class="muted">Vehicle and DVL frames are both forward-right-down. Pitch: positive = DVL tilted nose-up
+      (0° = pointing down, 90° = pointing forward). Roll: positive = DVL rolled right side down. Range: −180° to 180°.</p>
+    <label>Pitch (°) <input type="number" id="mount_pitch_deg" step="any" min="-180" max="180"></label>
+    <label>Roll (°) <input type="number" id="mount_roll_deg" step="any" min="-180" max="180"></label>
+    <div class="row">
+      <button onclick="saveMount()">Apply</button>
+      <button class="secondary" onclick="preset(0, 0)">Down = 0°</button>
+      <button class="secondary" onclick="preset(30, 0)">Tilted 30°</button>
+      <button class="secondary" onclick="preset(45, 0)">Tilted 45°</button>
+      <button class="secondary" onclick="preset(90, 0)">Forward = 90°</button>
+    </div>
+    <div class="msg" id="mount-msg"></div>
+    <div class="warn" id="double-warning"></div>
+    <div class="muted" id="live-source"></div>
+  </section>
+
+  <section class="card">
+    <h2>Live values</h2>
+    <table>
+      <tr><th></th><th>X / fwd</th><th>Y / right</th><th>Z / down</th></tr>
+      <tr><td>Velocity, DVL frame (m/s)</td><td id="vd0"></td><td id="vd1"></td><td id="vd2"></td></tr>
+      <tr><td>Velocity, vehicle frame (m/s)</td><td id="vv0"></td><td id="vv1"></td><td id="vv2"></td></tr>
+    </table>
+    <table style="margin-top:8px">
+      <tr><td>Altimeter range, raw (m)</td><td id="rd"></td></tr>
+      <tr><td>Altitude sent (m)</td><td id="rv"></td></tr>
+    </table>
+    <h2 style="margin-top:12px">Messages</h2>
+    <table id="counters"></table>
+    <div class="muted" id="dropped"></div>
+  </section>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = (v) => (typeof v === 'number' ? v.toFixed(3) : '—');
+let loaded = false;
+
+async function api(path, body) {
+  const options = body === undefined ? { method: 'POST' } : {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+  const response = await fetch('api/' + path, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || data.status || response.statusText);
+  return data;
+}
+
+function show(id, text, ok) {
+  $(id).textContent = text;
+  $(id).className = 'msg ' + (ok ? 'ok' : 'error');
+}
+
+async function act(name) {
+  show('action-msg', name + '…', true);
+  try { const r = await api(name); show('action-msg', r.status, true); }
+  catch (e) { show('action-msg', e.message, false); }
+  refresh();
+}
+
+async function saveGeneral() {
+  const body = { hostname: $('hostname').value.trim() || null, message_type: $('message_type').value };
+  for (const key of ['stream_only', 'autoconnect', 'autostart', 'enabled', 'rangefinder']) body[key] = $(key).checked;
+  try { await api('settings', body); show('general-msg', 'Saved', true); }
+  catch (e) { show('general-msg', e.message, false); }
+}
+
+function preset(pitch, roll) {
+  $('mount_pitch_deg').value = pitch;
+  $('mount_roll_deg').value = roll;
+  saveMount();
+}
+
+async function saveMount() {
+  const pitch = $('mount_pitch_deg').value, roll = $('mount_roll_deg').value;
+  if (pitch === '' || roll === '') { show('mount-msg', 'Enter both angles', false); return; }
+  try {
+    const r = await api('mount', { mount_pitch_deg: Number(pitch), mount_roll_deg: Number(roll) });
+    show('mount-msg', `Saved: pitch ${r.mount_pitch_deg}°, roll ${r.mount_roll_deg}°`, true);
+  } catch (e) { show('mount-msg', e.message, false); }
+}
+
+function fillSettings(s) {
+  $('hostname').value = s.hostname || '';
+  for (const key of ['stream_only', 'autoconnect', 'autostart', 'enabled', 'rangefinder']) $(key).checked = s[key];
+  $('message_type').value = s.message_type;
+  $('mount_pitch_deg').value = s.mount_pitch_deg;
+  $('mount_roll_deg').value = s.mount_roll_deg;
+}
+
+async function refresh() {
+  let s;
+  try { s = await (await fetch('api/status')).json(); }
+  catch (e) { $('status').textContent = 'Extension not reachable'; return; }
+  if (!loaded) { fillSettings(s.settings); loaded = true; }
+  $('status').textContent = s.status;
+  $('device').textContent = s.connected
+    ? `ID ${s.nucleus_id ?? '?'} · firmware ${s.nucleus_firmware ?? '?'} · device rotation (GETINST ROTXY,ROTYZ,ROTXZ): ${
+        s.device_rotation ? JSON.stringify(s.device_rotation) : (s.device_rotation_raw || 'not read yet (read on Start)')}`
+    : '';
+  $('double-warning').textContent = s.double_rotation_warning
+    ? 'Warning: the Nucleus itself has a non-zero ROTXY/ROTYZ/ROTXZ and a mount angle is set here. Make sure the rotation is not applied twice.'
+    : '';
+  $('live-source').textContent = s.live_angle_source ? 'A live angle source is active and overrides these angles.' : '';
+  const l = s.live || {};
+  for (let i = 0; i < 3; i++) {
+    $('vd' + i).textContent = fmt((l.velocity_dvl || [])[i]);
+    $('vv' + i).textContent = fmt((l.velocity_vehicle || [])[i]);
+  }
+  $('rd').textContent = fmt(l.range_dvl);
+  $('rv').textContent = s.settings.rangefinder ? fmt(l.range_vehicle) : 'off';
+  let rows = '<tr><th>Message</th><th>Sent</th><th>Skipped</th><th>Failed</th></tr>';
+  for (const [kind, c] of Object.entries(s.counters)) rows += `<tr><td>${kind}</td><td>${c.sent}</td><td>${c.skipped}</td><td>${c.failed}</td></tr>`;
+  $('counters').innerHTML = rows;
+  const d = s.dropped;
+  $('dropped').textContent = `Not sent: invalid velocity ${d.invalid_velocity}, invalid/out-of-view range ${d.invalid_range}, no mount angle ${d.no_mount_angle}. Skipped = sending disabled.`;
+}
+
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>
