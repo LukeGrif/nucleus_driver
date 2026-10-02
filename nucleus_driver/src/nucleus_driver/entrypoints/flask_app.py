@@ -26,7 +26,7 @@ class RovLink(Thread):
 
     CONFIG_PARAMETERS = {
         'AHRS_EKF_TYPE': {'value': 3, 'type': "MAV_PARAM_TYPE_UINT8"},
-        'EK2_ENABLE': {'value': 0, 'type': "MAV_PARAM_TYPE_UINT8"},
+        'EK2_ENABLE': {'value': 0, 'type': "MAV_PARAM_TYPE_UINT8", 'optional': True},  # Removed in ArduSub 4.7.0
         'EK3_ENABLE': {'value': 1, 'type': "MAV_PARAM_TYPE_UINT8"},
         'VISO_TYPE': {'value': 1, 'type': "MAV_PARAM_TYPE_UINT8"},
         #'EK3_GPS_TYPE': {'value': 3, 'type': "MAV_PARAM_TYPE_UINT8"},
@@ -444,6 +444,17 @@ class RovLink(Thread):
         for parameter in self.CONFIG_PARAMETERS.keys():
 
             response = self.get_parameter(parameter)
+
+            if self.CONFIG_PARAMETERS[parameter].get('optional', False):
+                # A missing parameter answers with another PARAM_VALUE (status 210). Retry to rule out a stale reply
+                for _ in range(2):
+                    if response.status_code != 210:
+                        break
+                    response = self.get_parameter(parameter)
+
+                if response.status_code == 210:
+                    logging.info(f'{parameter} does not exist on this vehicle, skipping it')
+                    continue
 
             if response.status_code == 200 and self.CONFIG_PARAMETERS[parameter]['value'] - 0.1 <= response.json()['message']['param_value'] <= self.CONFIG_PARAMETERS[parameter]['value'] + 0.1:
                 continue
